@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 基礎主題 -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#1a1a2e</item>
+        <item name="colorPrimaryDark">#0f3460</item>
+        <item name="colorAccent">#ffd700</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- 遊戲標題樣式 -->
+    <style name="GameTitleText">
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">#FFD700</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:shadowColor">#000000</item>
+        <item name="android:shadowDx">2</item>
+        <item name="android:shadowDy">2</item>
+        <item name="android:shadowRadius">4</item>
+    </style>
+
+    <!-- 遊戲普通文字樣式 -->
+    <style name="GameNormalText">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:shadowColor">#000000</item>
+        <item name="android:shadowDx">1</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">2</item>
+    </style>
+
+    <!-- 遊戲小文字樣式 -->
+    <style name="GameSmallText">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">#CCCCCC</item>
+        <item name="android:fontFamily">serif</item>
+    </style>
+
+    <!-- 遊戲數據文字樣式 -->
+    <style name="GameStatsText">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">#00FF7F</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- 遊戲按鈕文字樣式 -->
+    <style name="GameButtonText">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">#FFD700</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:shadowColor">#000000</item>
+        <item name="android:shadowDx">1</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">2</item>
+    </style>
+
+    <!-- 彈出菜單標題樣式 -->
+    <style name="PopupTitleText">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">#FFD700</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:shadowColor">#000000</item>
+        <item name="android:shadowDx">2</item>
+        <item name="android:shadowDy">2</item>
+        <item name="android:shadowRadius">3</item>
+    </style>
+
+    <!-- 菜單項目標題樣式 -->
+    <style name="MenuItemTitleText">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">#FFD700</item>
+        <item name="android:fontFamily">serif</item>
+        <item name="android:shadowColor">#000000</item>
+        <item name="android:shadowDx">1</item>
+        <item name="android:shadowDy">1</item>
+        <item name="android:shadowRadius">2</item>
+    </style>
+
+    <!-- 菜單項目描述樣式 -->
+    <style name="MenuItemDescText">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">#CCCCCC</item>
+        <item name="android:fontFamily">serif</item>
+    </style>
+</resources>

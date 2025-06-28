@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 遊戲風格主背景 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 深色漸變背景 -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#1a1a2e"
+                android:centerColor="#16213e"
+                android:endColor="#0f3460"
+                android:angle="45" />
+        </shape>
+    </item>
+    <!-- 紋理效果 -->
+    <item android:top="0dp" android:left="0dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#20ffffff"
+                android:endColor="#00ffffff"
+                android:angle="90" />
+        </shape>
+    </item>
+</layer-list>
