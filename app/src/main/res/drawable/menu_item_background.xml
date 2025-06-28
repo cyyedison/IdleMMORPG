@@ -54,8 +54,8 @@
                     <corners android:radius="8dp" />
                 </shape>
             </item>
-            <!-- 左側金色邊條 -->
-            <item android:top="4dp" android:left="2dp" android:right="88dp" android:bottom="6dp">
+            <!-- 左側金色邊條 - 調整寬度避免遮蓋文字 -->
+            <item android:top="4dp" android:left="2dp" android:right="276dp" android:bottom="6dp">
                 <shape android:shape="rectangle">
                     <solid android:color="#ffd700" />
                     <corners android:radius="2dp" />

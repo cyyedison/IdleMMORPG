@@ -17,7 +17,7 @@ class PlayerAnimationView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     private var isAttacking = false
-    private var armRotation = 0f
+    private var armRotation = -30f  // 初始位置：舉起
     private var bodyBounce = 0f
     private var attackAnimator: AnimatorSet? = null
     private var currentPlayer: Player? = null
@@ -28,12 +28,7 @@ class PlayerAnimationView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
-    private val headColor = Paint().apply {
-        color = Color.parseColor("#FDBCB4")
-        isAntiAlias = true
-    }
-
-    private val armColor = Paint().apply {
+    private val skinColor = Paint().apply {
         color = Color.parseColor("#FDBCB4")
         isAntiAlias = true
     }
@@ -86,20 +81,23 @@ class PlayerAnimationView @JvmOverloads constructor(
         // 繪製陰影
         drawShadow(canvas, centerX, height - 20f)
 
+        // 繪製左手臂（在身體後面，垂下）
+        canvas.save()
+        canvas.drawRoundRect(centerX - 42, centerY + bounceOffset - 30,
+            centerX - 30, centerY + bounceOffset + 20, 6f, 6f, skinColor)
+        canvas.restore()
+
         // 繪製腿部
         drawLegs(canvas, centerX, centerY + bounceOffset)
 
         // 繪製身體
         drawBody(canvas, centerX, centerY + bounceOffset)
 
-        // 繪製手臂
-        drawArms(canvas, centerX, centerY + bounceOffset)
-
         // 繪製頭部
         drawHead(canvas, centerX, centerY + bounceOffset - 80)
 
-        // 繪製武器
-        drawWeapon(canvas, centerX, centerY + bounceOffset)
+        // 繪製右手臂和武器（在身體前面）
+        drawRightArmWithWeapon(canvas, centerX, centerY + bounceOffset)
 
         // 繪製玩家血條
         currentPlayer?.let { player ->
@@ -116,18 +114,25 @@ class PlayerAnimationView @JvmOverloads constructor(
 
     private fun drawHead(canvas: Canvas, x: Float, y: Float) {
         // 頭部
-        canvas.drawCircle(x, y, 35f, headColor)
+        canvas.drawCircle(x, y, 35f, skinColor)
 
-        // 眼睛
-        canvas.drawCircle(x - 12, y - 8, 4f, Paint().apply { color = Color.BLACK })
-        canvas.drawCircle(x + 12, y - 8, 4f, Paint().apply { color = Color.BLACK })
+        // 眼睛（看向前方）
+        canvas.drawCircle(x - 12, y - 8, 4f, Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        })
+        canvas.drawCircle(x + 12, y - 8, 4f, Paint().apply {
+            color = Color.BLACK
+            isAntiAlias = true
+        })
 
-        // 嘴巴
-        canvas.drawArc(x - 10, y + 5, x + 10, y + 15, 0f, 180f, false,
+        // 嘴巴（戰鬥的表情）
+        canvas.drawArc(x - 8, y + 8, x + 8, y + 14, 0f, 180f, false,
             Paint().apply {
                 color = Color.BLACK
                 style = Paint.Style.STROKE
                 strokeWidth = 3f
+                isAntiAlias = true
             })
     }
 
@@ -147,41 +152,53 @@ class PlayerAnimationView @JvmOverloads constructor(
         canvas.drawRoundRect(x + 5, y + 95, x + 35, y + 110, 8f, 8f, Paint().apply { color = Color.BLACK })
     }
 
-    private fun drawArms(canvas: Canvas, x: Float, y: Float) {
+    private fun drawRightArmWithWeapon(canvas: Canvas, x: Float, y: Float) {
         canvas.save()
 
-        // 左手臂 (不動)
-        canvas.drawRoundRect(x - 50, y - 20, x - 30, y + 30, 10f, 10f, armColor)
-
-        // 右手臂 (攻擊動畫)
-        canvas.translate(x + 40, y - 10)
-        canvas.rotate(armRotation)
-        canvas.drawRoundRect(-10f, -10f, 10f, 40f, 10f, 10f, armColor)
-
-        canvas.restore()
-    }
-
-    private fun drawWeapon(canvas: Canvas, x: Float, y: Float) {
-        canvas.save()
-
-        // 武器跟隨右手臂旋轉
-        canvas.translate(x + 40, y - 10)
+        // 右手臂 (攻擊動畫) - 調整旋轉中心點到肩膀位置
+        canvas.translate(x + 25, y - 35)  // 調整到肩膀位置
         canvas.rotate(armRotation)
 
-        // 劍柄
-        canvas.drawRect(-3f, 30f, 3f, 50f, Paint().apply { color = Color.parseColor("#8B4513") })
+        // 繪製上臂
+        canvas.drawRoundRect(-5f, 0f, 7f, 30f, 6f, 6f, skinColor)
+
+        // 繪製前臂和手
+        canvas.translate(1f, 28f)
+        canvas.rotate(20f) // 前臂稍微彎曲
+        canvas.drawRoundRect(-5f, 0f, 5f, 25f, 5f, 5f, skinColor)
+
+        // 繪製手掌（握劍的手）
+        canvas.drawCircle(0f, 25f, 7f, skinColor)
+
+        // 繪製武器（在同一個變換中）
+        // 劍從手中向外延伸
+        // 劍柄（在手中）
+        canvas.drawRect(-3f, 20f, 3f, 35f, Paint().apply {
+            color = Color.parseColor("#8B4513")
+            isAntiAlias = true
+        })
+
+        // 護手
+        canvas.drawRect(-10f, 35f, 10f, 38f, Paint().apply {
+            color = Color.parseColor("#FFD700")
+            isAntiAlias = true
+        })
 
         // 劍身
-        canvas.drawRect(-2f, -20f, 2f, 35f, weaponColor)
+        val bladePaint = Paint().apply {
+            color = Color.parseColor("#C0C0C0")
+            isAntiAlias = true
+        }
+        canvas.drawRect(-3f, 38f, 3f, 85f, bladePaint)
 
         // 劍尖
         val path = Path().apply {
-            moveTo(0f, -30f)
-            lineTo(-2f, -20f)
-            lineTo(2f, -20f)
+            moveTo(0f, 85f)
+            lineTo(-3f, 95f)
+            lineTo(3f, 95f)
             close()
         }
-        canvas.drawPath(path, weaponColor)
+        canvas.drawPath(path, bladePaint)
 
         canvas.restore()
     }
@@ -235,8 +252,8 @@ class PlayerAnimationView @JvmOverloads constructor(
 
         isAttacking = true
 
-        // 手臂旋轉動畫
-        val armAnimator = ObjectAnimator.ofFloat(this, "armRotation", 0f, -90f, 0f).apply {
+        // 手臂旋轉動畫 - 從上往下揮劍
+        val armAnimator = ObjectAnimator.ofFloat(this, "armRotation", -170f, -45f, -170f).apply {
             duration = 600
             interpolator = AccelerateDecelerateInterpolator()
         }
@@ -270,7 +287,9 @@ class PlayerAnimationView @JvmOverloads constructor(
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener { animator ->
                 val progress = animator.animatedValue as Float
-                armRotation = sin(progress * 2 * PI).toFloat() * 45f
+                // 從舉起到揮下的動作 - 更流暢的弧線
+                val swingProgress = sin(progress * PI).toFloat()
+                armRotation = -170f + swingProgress * 140f  // 從-45度到75度
                 bodyBounce = progress * 360f
                 invalidate()
             }
@@ -283,7 +302,7 @@ class PlayerAnimationView @JvmOverloads constructor(
 
     fun stopAttackAnimation() {
         attackAnimator?.cancel()
-        armRotation = 0f
+        armRotation = -30f  // 回到舉起位置
         bodyBounce = 0f
         isAttacking = false
         invalidate()
