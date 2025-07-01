@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主顯示區域背景 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外部陰影 -->
+    <item android:top="3dp" android:left="3dp" android:right="3dp" android:bottom="3dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#60000000" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <!-- 主體背景 -->
+    <item android:bottom="3dp" android:right="3dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#2C3E50"
+                android:centerColor="#34495E"
+                android:endColor="#2C3E50"
+                android:angle="135" />
+            <corners android:radius="12dp" />
+            <stroke android:width="2dp" android:color="#5A6B8C" />
+        </shape>
+    </item>
+    <!-- 內部高光 -->
+    <item android:top="3dp" android:left="3dp" android:right="6dp" android:bottom="6dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#30ffffff"
+                android:endColor="#00ffffff"
+                android:angle="90" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <!-- 內容區域紋理 -->
+    <item android:top="8dp" android:left="8dp" android:right="12dp" android:bottom="12dp">
+        <shape android:shape="rectangle">
+            <gradient
+                android:startColor="#1A252F"
+                android:endColor="#0F1419"
+                android:angle="45" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</layer-list>

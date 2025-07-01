@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外部陰影 -->
+    <item android:top="2dp" android:left="2dp" android:right="2dp" android:bottom="2dp">
+        <shape android:shape="oval">
+            <solid android:color="#80000000" />
+        </shape>
+    </item>
+    <!-- 金色邊框 -->
+    <item android:bottom="2dp" android:right="2dp">
+        <shape android:shape="oval">
+            <stroke android:width="3dp" android:color="#FFD700" />
+            <gradient
+                android:startColor="#8B4513"
+                android:endColor="#654321"
+                android:angle="135" />
+        </shape>
+    </item>
+    <!-- 內部高光 -->
+    <item android:top="2dp" android:left="2dp" android:right="4dp" android:bottom="4dp">
+        <shape android:shape="oval">
+            <gradient
+                android:startColor="#40FFD700"
+                android:endColor="#00FFD700"
+                android:angle="90" />
+        </shape>
+    </item>
+    <!-- 戰士圖標 -->
+    <item android:top="18dp" android:left="18dp" android:right="22dp" android:bottom="22dp">
+        <shape android:shape="oval">
+            <solid android:color="#2F4F4F" />
+        </shape>
+    </item>
+</layer-list>
