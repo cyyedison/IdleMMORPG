@@ -318,4 +318,26 @@
 
     </FrameLayout>
 
+    <!-- 背包彈出窗覆蓋層 -->
+    <FrameLayout
+        android:id="@+id/inventoryOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:clickable="true">
+
+        <FrameLayout
+            android:id="@+id/inventoryContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="20dp"
+            android:background="@drawable/popup_game_background">
+
+            <!-- InventoryView 會動態添加到這裡 -->
+
+        </FrameLayout>
+
+    </FrameLayout>
+
 </RelativeLayout>

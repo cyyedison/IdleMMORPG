@@ -36,6 +36,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerInfoText: TextView
     private lateinit var btnClosePlayerInfo: LinearLayout
 
+    // 背包彈出窗
+    private lateinit var inventoryOverlay: FrameLayout
+
+    companion object {
+        // 添加 ID 常量避免編譯錯誤
+        private const val INVENTORY_VIEW_ID = 999001
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -81,6 +89,9 @@ class MainActivity : AppCompatActivity() {
         playerInfoText = findViewById(R.id.playerInfoText)
         btnClosePlayerInfo = findViewById(R.id.btnClosePlayerInfo)
 
+        // 背包彈出窗
+        inventoryOverlay = findViewById(R.id.inventoryOverlay)
+
         setupClickListeners()
     }
 
@@ -97,15 +108,15 @@ class MainActivity : AppCompatActivity() {
         // 角色資訊關閉
         btnClosePlayerInfo.setOnClickListener { hidePlayerInfoPanel() }
         playerInfoOverlay.setOnClickListener { hidePlayerInfoPanel() }
+
+        // 背包彈出窗關閉
+        inventoryOverlay.setOnClickListener { hideInventoryPopup() }
     }
 
     private fun setupNavigation() {
         btnInventory.setOnClickListener {
-            updateButtonSelection(btnInventory)
-            gameManager.changeLocation("inventory")
-            updateUI()
+            // 不更新按鈕選擇狀態，不改變位置，只顯示背包彈出窗
             showInventory()
-            hidePopupMenu()
         }
 
         btnTraining.setOnClickListener {
@@ -295,26 +306,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showInventory() {
-        clearMainDisplay()
-        val contentText = """
-            📦 物品欄位
-            
-            💰 金幣: ${gameManager.player.gold}
-            
-            🧪 藥品庫存:
-            ${if (gameManager.player.potions.isEmpty()) "空空如也" else gameManager.player.potions.entries.joinToString("\n") { "${it.key.name}: ${it.value}個" }}
-            
-            ⚔️ 目前武器: +${gameManager.player.weaponAttack} 攻擊力
-            🛡️ 目前防具: +${gameManager.player.armorDefense} 防禦力
-            
-            📊 角色狀態:
-            • 等級: ${gameManager.player.level}
-            • 經驗值: ${gameManager.player.experience}/${gameManager.player.experienceToNextLevel}
-            • 血量: ${gameManager.player.currentHp}/${gameManager.player.maxHp}
-        """.trimIndent()
-
-        val contentView = createTitledContent("🎒 背包系統 🎒", contentText)
-        mainDisplayArea.addView(contentView)
+        // 不改變當前位置，只顯示背包彈出窗
+        showInventoryPopup()
     }
 
     private fun showWeaponShop() {
@@ -328,6 +321,8 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "✅ 購買${weapon.name}成功！", Toast.LENGTH_SHORT).show()
                 updateUI()
                 showWeaponShop()
+                // 如果當前在背包界面，刷新背包
+                refreshInventoryIfShowing()
             } else {
                 Toast.makeText(this, "❌ 金幣不足！還需要${weapon.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
             }
@@ -346,6 +341,8 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "✅ 購買${armor.name}成功！", Toast.LENGTH_SHORT).show()
                 updateUI()
                 showArmorShop()
+                // 如果當前在背包界面，刷新背包
+                refreshInventoryIfShowing()
             } else {
                 Toast.makeText(this, "❌ 金幣不足！還需要${armor.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
             }
@@ -561,6 +558,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this@MainActivity, "✅ 購買1個${potion.name}成功！", Toast.LENGTH_SHORT).show()
                         updateUI()
                         showConvenienceStore()
+                        refreshInventoryIfShowing()
                     } else {
                         Toast.makeText(this@MainActivity, "❌ 金幣不足！還需要${potion.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
                     }
@@ -580,6 +578,7 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(this@MainActivity, "✅ 購買10個${potion.name}成功！", Toast.LENGTH_SHORT).show()
                         updateUI()
                         showConvenienceStore()
+                        refreshInventoryIfShowing()
                     } else {
                         Toast.makeText(this@MainActivity, "❌ 金幣不足！還需要${potion.price * 10 - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
                     }
@@ -644,5 +643,44 @@ class MainActivity : AppCompatActivity() {
 
     fun updatePlayerStats() {
         updateUI()
+    }
+
+    private fun refreshInventoryIfShowing() {
+        // 檢查當前顯示區域是否有InventoryView
+        for (i in 0 until mainDisplayArea.childCount) {
+            val child = mainDisplayArea.getChildAt(i)
+            if (child is InventoryView) {
+                child.refreshInventory()
+                break
+            }
+        }
+
+        // 檢查背包彈出窗是否顯示
+        if (inventoryOverlay.visibility == View.VISIBLE) {
+            val inventoryView = inventoryOverlay.findViewById<InventoryView>(INVENTORY_VIEW_ID)
+            inventoryView?.refreshInventory()
+        }
+    }
+
+    private fun showInventoryPopup() {
+        // 創建背包視圖
+        val inventoryView = InventoryView(this, gameManager)
+        inventoryView.id = INVENTORY_VIEW_ID // 使用常量ID
+
+        // 清除舊的背包視圖
+        val inventoryContainer = inventoryOverlay.findViewById<FrameLayout>(R.id.inventoryContainer)
+        inventoryContainer.removeAllViews()
+        inventoryContainer.addView(inventoryView)
+
+        // 顯示背包彈出窗
+        inventoryOverlay.visibility = View.VISIBLE
+        inventoryOverlay.alpha = 0f
+        inventoryOverlay.animate().alpha(1f).setDuration(200).start()
+    }
+
+    private fun hideInventoryPopup() {
+        inventoryOverlay.animate().alpha(0f).setDuration(200).withEndAction {
+            inventoryOverlay.visibility = View.GONE
+        }.start()
     }
 }
