@@ -15,6 +15,10 @@ class GameManager(private val context: Context) {
     private var battleRunnable: Runnable? = null
     private var battleView: BattleView? = null
 
+    // 添加装备库存支持
+    private val inventoryWeapons = mutableListOf<Weapon>()
+    private val inventoryArmors = mutableListOf<Armor>()
+
     private val sharedPrefs: SharedPreferences =
         context.getSharedPreferences("game_data", Context.MODE_PRIVATE)
 
@@ -28,6 +32,101 @@ class GameManager(private val context: Context) {
 
     fun getCurrentMonster(): Monster? = currentMonster
     fun isAutoBattling(): Boolean = isAutoBattling
+
+    // 装备库存管理方法
+    fun addWeaponToInventory(weapon: Weapon) {
+        inventoryWeapons.add(weapon)
+        saveGameState()
+    }
+
+    fun addArmorToInventory(armor: Armor) {
+        inventoryArmors.add(armor)
+        saveGameState()
+    }
+
+    fun removeWeaponFromInventory(weapon: Weapon): Boolean {
+        val removed = inventoryWeapons.removeAll { it.name == weapon.name && it.attack == weapon.attack }
+        if (removed) saveGameState()
+        return removed
+    }
+
+    fun removeArmorFromInventory(armor: Armor): Boolean {
+        val removed = inventoryArmors.removeAll { it.name == armor.name && it.defense == armor.defense }
+        if (removed) saveGameState()
+        return removed
+    }
+
+    fun getInventoryWeapons(): List<Weapon> = inventoryWeapons.toList()
+    fun getInventoryArmors(): List<Armor> = inventoryArmors.toList()
+
+    // 卸下装备的方法
+    fun unequipWeapon(): Boolean {
+        if (player.weaponAttack > 0) {
+            val weapon = UIHelpers.GameData.WEAPONS.find { it.attack == player.weaponAttack }
+            weapon?.let {
+                // 先將武器攻擊力設為0，再添加到庫存
+                player.weaponAttack = 0
+                inventoryWeapons.add(it)
+                saveGameState()
+
+                // 調試信息
+                if (context is MainActivity) {
+                    Toast.makeText(context, "調試：卸下武器 ${it.name}，庫存武器數量：${inventoryWeapons.size}", Toast.LENGTH_LONG).show()
+                }
+
+                return true
+            }
+        }
+        return false
+    }
+
+    fun unequipArmor(): Boolean {
+        if (player.armorDefense > 0) {
+            val armor = UIHelpers.GameData.ARMORS.find { it.defense == player.armorDefense }
+            armor?.let {
+                // 先將防具防禦力設為0，再添加到庫存
+                player.armorDefense = 0
+                inventoryArmors.add(it)
+                saveGameState()
+
+                // 調試信息
+                if (context is MainActivity) {
+                    Toast.makeText(context, "調試：卸下防具 ${it.name}，庫存防具數量：${inventoryArmors.size}", Toast.LENGTH_LONG).show()
+                }
+
+                return true
+            }
+        }
+        return false
+    }
+
+    // 装备武器的方法
+    fun equipWeaponFromInventory(weapon: Weapon): Boolean {
+        if (removeWeaponFromInventory(weapon)) {
+            // 如果当前有装备武器，先卸下
+            if (player.weaponAttack > 0) {
+                unequipWeapon()
+            }
+            player.weaponAttack = weapon.attack
+            saveGameState()
+            return true
+        }
+        return false
+    }
+
+    // 装备防具的方法
+    fun equipArmorFromInventory(armor: Armor): Boolean {
+        if (removeArmorFromInventory(armor)) {
+            // 如果当前有装备防具，先卸下
+            if (player.armorDefense > 0) {
+                unequipArmor()
+            }
+            player.armorDefense = armor.defense
+            saveGameState()
+            return true
+        }
+        return false
+    }
 
     private fun updateMainUI() {
         if (context is MainActivity) {
@@ -144,7 +243,8 @@ class GameManager(private val context: Context) {
     fun buyWeapon(weapon: Weapon): Boolean {
         if (player.gold >= weapon.price) {
             player.gold -= weapon.price
-            player.weaponAttack = weapon.attack
+            // 将武器添加到库存而不是直接装备
+            addWeaponToInventory(weapon)
             saveGameState()
             return true
         }
@@ -154,7 +254,8 @@ class GameManager(private val context: Context) {
     fun buyArmor(armor: Armor): Boolean {
         if (player.gold >= armor.price) {
             player.gold -= armor.price
-            player.armorDefense = armor.defense
+            // 将防具添加到库存而不是直接装备
+            addArmorToInventory(armor)
             saveGameState()
             return true
         }
@@ -190,6 +291,13 @@ class GameManager(private val context: Context) {
 
             val potionData = player.potions.map { "${it.key.name}:${it.value}" }.joinToString(";")
             putString("potions", potionData)
+
+            // 保存装备库存
+            val weaponData = inventoryWeapons.map { "${it.name}:${it.attack}:${it.price}" }.joinToString(";")
+            putString("inventoryWeapons", weaponData)
+
+            val armorData = inventoryArmors.map { "${it.name}:${it.defense}:${it.price}" }.joinToString(";")
+            putString("inventoryArmors", armorData)
 
             apply()
         }
@@ -230,6 +338,35 @@ class GameManager(private val context: Context) {
                     if (potion != null && count > 0) {
                         player.potions[potion] = count
                     }
+                }
+            }
+        }
+
+        // 加载装备库存
+        inventoryWeapons.clear()
+        val weaponData = sharedPrefs.getString("inventoryWeapons", "") ?: ""
+        if (weaponData.isNotEmpty()) {
+            weaponData.split(";").forEach { entry ->
+                val parts = entry.split(":")
+                if (parts.size == 3) {
+                    val name = parts[0]
+                    val attack = parts[1].toIntOrNull() ?: 0
+                    val price = parts[2].toIntOrNull() ?: 0
+                    inventoryWeapons.add(Weapon(name, attack, price))
+                }
+            }
+        }
+
+        inventoryArmors.clear()
+        val armorData = sharedPrefs.getString("inventoryArmors", "") ?: ""
+        if (armorData.isNotEmpty()) {
+            armorData.split(";").forEach { entry ->
+                val parts = entry.split(":")
+                if (parts.size == 3) {
+                    val name = parts[0]
+                    val defense = parts[1].toIntOrNull() ?: 0
+                    val price = parts[2].toIntOrNull() ?: 0
+                    inventoryArmors.add(Armor(name, defense, price))
                 }
             }
         }

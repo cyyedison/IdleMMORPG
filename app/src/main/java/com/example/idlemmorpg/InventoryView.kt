@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import kotlin.math.floor
 
 class InventoryView(context: Context, private val gameManager: GameManager) : View(context) {
@@ -26,11 +27,17 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
     private var selectedItem: InventoryItem? = null
     private var selectedSlot: Pair<Int, Int>? = null
 
+    // 選中的裝備槽位
+    private var selectedEquipmentSlot: EquipmentSlot? = null
+
     // 背包數據
     private val inventoryItems = Array(INVENTORY_ROWS) { Array<InventoryItem?>(INVENTORY_COLS) { null } }
 
     // 裝備槽位
     private val equipmentSlots = mutableMapOf<EquipmentSlot, InventoryItem?>()
+
+    // 裝備槽位位置記錄 - 新增這個變量來記錄每個槽位的位置
+    private val equipmentSlotPositions = mutableMapOf<EquipmentSlot, RectF>()
 
     // 繪製用的Paint
     private val slotPaint = Paint().apply {
@@ -144,10 +151,13 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             }
         }
 
+        // 清空裝備槽
+        equipmentSlots.clear()
+
         var currentRow = 0
         var currentCol = 0
 
-        // 添加藥品到背包
+        // 添加药品到背包
         player.potions.forEach { (potion, count) ->
             if (count > 0 && currentRow < INVENTORY_ROWS) {
                 inventoryItems[currentRow][currentCol] = InventoryItem(
@@ -166,7 +176,45 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             }
         }
 
-        // 添加當前裝備到裝備槽
+        // 添加库存中的武器到背包
+        gameManager.getInventoryWeapons().forEach { weapon ->
+            if (currentRow < INVENTORY_ROWS) {
+                inventoryItems[currentRow][currentCol] = InventoryItem(
+                    name = weapon.name,
+                    emoji = "⚔️",
+                    count = 1,
+                    type = ItemType.WEAPON,
+                    data = weapon
+                )
+
+                currentCol++
+                if (currentCol >= INVENTORY_COLS) {
+                    currentCol = 0
+                    currentRow++
+                }
+            }
+        }
+
+        // 添加库存中的防具到背包
+        gameManager.getInventoryArmors().forEach { armor ->
+            if (currentRow < INVENTORY_ROWS) {
+                inventoryItems[currentRow][currentCol] = InventoryItem(
+                    name = armor.name,
+                    emoji = "🛡️",
+                    count = 1,
+                    type = ItemType.ARMOR,
+                    data = armor
+                )
+
+                currentCol++
+                if (currentCol >= INVENTORY_COLS) {
+                    currentCol = 0
+                    currentRow++
+                }
+            }
+        }
+
+        // 添加当前装备到装备槽
         if (player.weaponAttack > 0) {
             val weapon = UIHelpers.GameData.WEAPONS.find { it.attack == player.weaponAttack }
             weapon?.let {
@@ -327,8 +375,8 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
 
             // 操作提示
             val actionHint = when (item.type) {
-                ItemType.WEAPON -> "點擊右側武器槽位裝備"
-                ItemType.ARMOR -> "點擊身體部位裝備"
+                ItemType.WEAPON -> "點擊右側武器槽位裝備，或再次點擊自動裝備"
+                ItemType.ARMOR -> "點擊身體部位裝備，或再次點擊自動裝備"
                 ItemType.POTION -> "點擊此物品使用藥品"
             }
 
@@ -452,13 +500,26 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + height)
         )
 
+        // 清空並重新記錄槽位位置
+        equipmentSlotPositions.clear()
+
         slots.forEach { (slot, position) ->
             val x = position.first
             val y = position.second
 
+            // 記錄槽位位置用於點擊檢測
+            equipmentSlotPositions[slot] = RectF(x, y, x + slotSize, y + slotSize)
+
             // 繪製槽位背景
             canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 10f, 10f, slotPaint)
-            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 10f, 10f, slotBorderPaint)
+
+            // 繪製槽位邊框 - 選中的裝備槽位顯示金色邊框
+            val borderPaint = if (selectedEquipmentSlot == slot) {
+                selectedSlotPaint
+            } else {
+                slotBorderPaint
+            }
+            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 10f, 10f, borderPaint)
 
             // 繪製裝備或空槽位標識
             val item = equipmentSlots[slot]
@@ -502,14 +563,36 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 if (row in 0 until INVENTORY_ROWS && col in 0 until INVENTORY_COLS) {
                     val item = inventoryItems[row][col]
                     if (item != null) {
-                        // 如果點擊的是已選中的藥品，直接使用
-                        if (selectedItem == item && item.type == ItemType.POTION) {
-                            usePotion(item)
+                        // 如果点击的是已选中的物品
+                        if (selectedItem == item) {
+                            when (item.type) {
+                                ItemType.POTION -> {
+                                    // 药品直接使用
+                                    usePotion(item)
+                                }
+                                ItemType.WEAPON -> {
+                                    // 武器自动装备到武器槽位
+                                    autoEquipWeapon(item)
+                                }
+                                ItemType.ARMOR -> {
+                                    // 防具自动装备到胸部槽位
+                                    autoEquipArmor(item)
+                                }
+                            }
                         } else {
+                            // 第一次点击，选中物品
                             selectedItem = item
                             selectedSlot = Pair(row, col)
+                            // 清除装备槽位选中状态
+                            selectedEquipmentSlot = null
                             invalidate()
                         }
+                    } else {
+                        // 点击空槽位，清除选中状态
+                        selectedItem = null
+                        selectedSlot = null
+                        selectedEquipmentSlot = null
+                        invalidate()
                     }
                 }
                 return true
@@ -531,28 +614,9 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 return true
             }
 
-            // 檢查是否點擊了裝備槽位
-            val centerX = width / 2f
-            val humanoidY = equipmentAreaTop + 40f
-            val humanoidWidth = 120f
-            val humanoidHeight = 200f
-            val slotSize = SLOT_SIZE * 0.8f
-
-            val slots = mapOf(
-                EquipmentSlot.HELMET to Pair(centerX - slotSize/2, humanoidY),
-                EquipmentSlot.CHEST to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.5f - slotSize/2),
-                EquipmentSlot.GLOVES to Pair(centerX - humanoidWidth/2 - slotSize - 20f, humanoidY + humanoidHeight * 0.6f - slotSize/2),
-                EquipmentSlot.WEAPON to Pair(centerX + humanoidWidth/2 + 20f, humanoidY + humanoidHeight * 0.6f - slotSize/2),
-                EquipmentSlot.LEGS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.8f - slotSize/2),
-                EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight)
-            )
-
-            // 檢查點擊的裝備槽位
-            slots.forEach { (slot, position) ->
-                val slotX = position.first
-                val slotY = position.second
-
-                if (x >= slotX && x <= slotX + slotSize && y >= slotY && y <= slotY + slotSize) {
+            // 檢查是否點擊了裝備槽位 - 修改這部分邏輯
+            equipmentSlotPositions.forEach { (slot, rect) ->
+                if (rect.contains(x, y)) {
                     handleEquipmentSlotClick(slot)
                     return true
                 }
@@ -564,69 +628,148 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
     }
 
     private fun handleEquipmentSlotClick(slot: EquipmentSlot) {
+        val currentItem = equipmentSlots[slot]
+
+        // 顯示點擊反饋 Toast
+        val slotMessage = if (currentItem != null) {
+            "點擊了 ${slot.displayName}：${currentItem.name}"
+        } else {
+            "點擊了空的 ${slot.displayName} 槽位"
+        }
+        Toast.makeText(context, slotMessage, Toast.LENGTH_SHORT).show()
+
+        // 檢查是否點擊的是已選中的裝備槽位
+        if (selectedEquipmentSlot == slot && currentItem != null) {
+            // 第二次點擊同一個有裝備的槽位 - 卸下裝備
+            unequipItem(slot)
+            return
+        }
+
+        // 如果有背包物品被選中，檢查是否是可裝備的物品
         selectedItem?.let { item ->
             when (item.type) {
                 ItemType.WEAPON -> {
                     if (slot == EquipmentSlot.WEAPON) {
                         equipWeapon(item)
+                        // 裝備成功後清除選中狀態
+                        selectedItem = null
+                        selectedSlot = null
+                        selectedEquipmentSlot = null
+                        return
                     }
                 }
                 ItemType.ARMOR -> {
                     if (slot == EquipmentSlot.CHEST) {
                         equipArmor(item)
+                        // 裝備成功後清除選中狀態
+                        selectedItem = null
+                        selectedSlot = null
+                        selectedEquipmentSlot = null
+                        return
                     }
                 }
                 ItemType.POTION -> {
-                    // 藥品不能裝備，顯示提示信息
-                    selectedItem = item
-                    invalidate()
+                    // 藥品不能裝備，直接選擇該槽位的裝備（如果有的話）
+                    // 不顯示錯誤訊息，因為這是正常的選擇行為
                 }
             }
         }
+
+        // 選擇該槽位的裝備（或空槽位）
+        if (currentItem != null) {
+            // 選中裝備槽位中的物品
+            selectedItem = currentItem
+            selectedEquipmentSlot = slot
+            // 清除背包選中狀態
+            selectedSlot = null
+            invalidate()
+            Toast.makeText(context, "已選中 ${currentItem.name}，再次點擊可卸下", Toast.LENGTH_SHORT).show()
+        } else {
+            // 點擊空槽位，只是選中該槽位
+            selectedEquipmentSlot = slot
+            selectedItem = null
+            selectedSlot = null
+            invalidate()
+        }
+    }
+
+    private fun unequipItem(slot: EquipmentSlot) {
+        val item = equipmentSlots[slot] ?: return
+
+        // 檢查背包是否有空間
+        if (!addItemToInventory(item)) {
+            return // 背包已滿，不能卸下
+        }
+
+        // 從裝備槽移除
+        equipmentSlots[slot] = null
+
+        // 更新玩家屬性
+        when (slot) {
+            EquipmentSlot.WEAPON -> {
+                gameManager.player.weaponAttack = 0
+            }
+            EquipmentSlot.CHEST -> {
+                gameManager.player.armorDefense = 0
+            }
+            else -> {
+                // 其他槽位暫時不處理
+            }
+        }
+
+        // 清除選中狀態
+        selectedItem = null
+        selectedEquipmentSlot = null
+        selectedSlot = null
+
+        // 更新遊戲狀態
+        gameManager.saveGameState()
+        refreshDisplay()
+        notifyMainActivity()
+
+        Toast.makeText(context, "✅ 卸下 ${item.name} 成功！", Toast.LENGTH_SHORT).show()
     }
 
     private fun equipWeapon(item: InventoryItem) {
         val weapon = item.data as Weapon
 
-        // 卸下當前武器（如果有）
-        val currentWeapon = equipmentSlots[EquipmentSlot.WEAPON]
-        if (currentWeapon != null) {
-            addItemToInventory(currentWeapon)
+        // 使用GameManager的方法装备武器
+        if (gameManager.equipWeaponFromInventory(weapon)) {
+            // 从背包移除
+            removeItemFromInventory(item)
+
+            // 重新加载物品以反映更改
+            loadPlayerItems()
+
+            // 更新游戏状态
+            refreshDisplay()
+            notifyMainActivity()
+
+            Toast.makeText(context, "✅ 装备${weapon.name}成功！", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "装备武器失败", Toast.LENGTH_SHORT).show()
         }
-
-        // 裝備新武器
-        equipmentSlots[EquipmentSlot.WEAPON] = item
-        gameManager.player.weaponAttack = weapon.attack
-
-        // 從背包移除
-        removeItemFromInventory(item)
-
-        // 更新遊戲狀態
-        gameManager.saveGameState()
-        refreshDisplay()
-        notifyMainActivity()
     }
 
     private fun equipArmor(item: InventoryItem) {
         val armor = item.data as Armor
 
-        // 卸下當前防具（如果有）
-        val currentArmor = equipmentSlots[EquipmentSlot.CHEST]
-        if (currentArmor != null) {
-            addItemToInventory(currentArmor)
+        // 使用GameManager的方法装备防具
+        if (gameManager.equipArmorFromInventory(armor)) {
+            // 从背包移除
+            removeItemFromInventory(item)
+
+            // 重新加载物品以反映更改
+            loadPlayerItems()
+
+            // 更新游戏状态
+            refreshDisplay()
+            notifyMainActivity()
+
+            Toast.makeText(context, "✅ 装备${armor.name}成功！", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "装备防具失败", Toast.LENGTH_SHORT).show()
         }
-
-        // 裝備新防具
-        equipmentSlots[EquipmentSlot.CHEST] = item
-        gameManager.player.armorDefense = armor.defense
-
-        // 從背包移除
-        removeItemFromInventory(item)
-
-        // 更新遊戲狀態
-        gameManager.saveGameState()
-        refreshDisplay()
-        notifyMainActivity()
     }
 
     private fun usePotion(item: InventoryItem) {
@@ -635,10 +778,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
 
         if (player.currentHp >= player.maxHp) {
             // 血量已滿，顯示提示
-            val ctx = context
-            if (ctx is MainActivity) {
-                android.widget.Toast.makeText(ctx, "❤️ 血量已滿，無需使用藥品", android.widget.Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(context, "❤️ 血量已滿，無需使用藥品", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -661,10 +801,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             refreshDisplay()
             notifyMainActivity()
 
-            val ctx = context
-            if (ctx is MainActivity) {
-                android.widget.Toast.makeText(ctx, "✅ 使用${potion.name}，回復${potion.healAmount}血量", android.widget.Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(context, "✅ 使用${potion.name}，回復${potion.healAmount}血量", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -678,6 +815,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 }
             }
         }
+        Toast.makeText(context, "背包已滿！", Toast.LENGTH_SHORT).show()
         return false // 背包已滿
     }
 
@@ -688,6 +826,58 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 selectedItem = null
                 selectedSlot = null
             }
+        }
+    }
+
+    private fun autoEquipWeapon(item: InventoryItem) {
+        val weapon = item.data as Weapon
+
+        // 使用GameManager的方法装备武器
+        if (gameManager.equipWeaponFromInventory(weapon)) {
+            // 从背包移除
+            removeItemFromInventory(item)
+
+            // 清除选中状态
+            selectedItem = null
+            selectedSlot = null
+            selectedEquipmentSlot = null
+
+            // 重新加载物品以反映更改
+            loadPlayerItems()
+
+            // 更新游戏状态
+            refreshDisplay()
+            notifyMainActivity()
+
+            Toast.makeText(context, "✅ 自动装备${weapon.name}成功！", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "装备武器失败", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun autoEquipArmor(item: InventoryItem) {
+        val armor = item.data as Armor
+
+        // 使用GameManager的方法装备防具
+        if (gameManager.equipArmorFromInventory(armor)) {
+            // 从背包移除
+            removeItemFromInventory(item)
+
+            // 清除选中状态
+            selectedItem = null
+            selectedSlot = null
+            selectedEquipmentSlot = null
+
+            // 重新加载物品以反映更改
+            loadPlayerItems()
+
+            // 更新游戏状态
+            refreshDisplay()
+            notifyMainActivity()
+
+            Toast.makeText(context, "✅ 自动装备${armor.name}成功！", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "装备防具失败", Toast.LENGTH_SHORT).show()
         }
     }
 

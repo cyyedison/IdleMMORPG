@@ -98,38 +98,77 @@ class MainActivity : AppCompatActivity() {
     private fun setupClickListeners() {
         popupRecyclerView.layoutManager = LinearLayoutManager(this)
 
-        // 頭像點擊
-        avatarButton.setOnClickListener { showPlayerInfoPanel() }
+        // 头像点击
+        avatarButton.setOnClickListener {
+            // 如果背包界面开启，先关闭
+            if (inventoryOverlay.visibility == View.VISIBLE) {
+                hideInventoryPopup()
+            }
+            showPlayerInfoPanel()
+        }
 
-        // 彈出菜單關閉
+        // 弹出菜单关闭
         btnClosePopup.setOnClickListener { hidePopupMenu() }
         overlayContainer.setOnClickListener { hidePopupMenu() }
 
-        // 角色資訊關閉
+        // 角色资讯关闭
         btnClosePlayerInfo.setOnClickListener { hidePlayerInfoPanel() }
         playerInfoOverlay.setOnClickListener { hidePlayerInfoPanel() }
 
-        // 背包彈出窗關閉
-        inventoryOverlay.setOnClickListener { hideInventoryPopup() }
+        // 背包弹出窗关闭 - 修改这部分
+        inventoryOverlay.setOnClickListener { event ->
+            // 获取点击位置
+            val x = event.x
+            val y = event.y
+
+            // 获取inventoryContainer的位置
+            val inventoryContainer = inventoryOverlay.findViewById<FrameLayout>(R.id.inventoryContainer)
+            val location = IntArray(2)
+            inventoryContainer.getLocationOnScreen(location)
+
+            // 检查点击是否在inventoryContainer外部
+            if (x < location[0] || x > location[0] + inventoryContainer.width ||
+                y < location[1] || y > location[1] + inventoryContainer.height) {
+                hideInventoryPopup()
+            }
+        }
     }
 
     private fun setupNavigation() {
         btnInventory.setOnClickListener {
-            // 不更新按鈕選擇狀態，不改變位置，只顯示背包彈出窗
-            showInventory()
+            // 检查背包界面是否已经显示
+            if (inventoryOverlay.visibility == View.VISIBLE) {
+                // 如果已显示，则关闭
+                hideInventoryPopup()
+            } else {
+                // 如果未显示，则显示背包
+                showInventory()
+            }
         }
 
         btnTraining.setOnClickListener {
+            // 如果背包界面开启，先关闭
+            if (inventoryOverlay.visibility == View.VISIBLE) {
+                hideInventoryPopup()
+            }
             updateButtonSelection(btnTraining)
             showTrainingPopup()
         }
 
         btnShop.setOnClickListener {
+            // 如果背包界面开启，先关闭
+            if (inventoryOverlay.visibility == View.VISIBLE) {
+                hideInventoryPopup()
+            }
             updateButtonSelection(btnShop)
             showShopPopup()
         }
 
         btnSettings.setOnClickListener {
+            // 如果背包界面开启，先关闭
+            if (inventoryOverlay.visibility == View.VISIBLE) {
+                hideInventoryPopup()
+            }
             updateButtonSelection(btnSettings)
             gameManager.changeLocation("settings")
             updateUI()
@@ -637,6 +676,23 @@ class MainActivity : AppCompatActivity() {
             }
             else -> {
                 showMainCity()
+            }
+        }
+    }
+
+    override fun onBackPressed() {
+        when {
+            inventoryOverlay.visibility == View.VISIBLE -> {
+                hideInventoryPopup()
+            }
+            playerInfoOverlay.visibility == View.VISIBLE -> {
+                hidePlayerInfoPanel()
+            }
+            overlayContainer.visibility == View.VISIBLE -> {
+                hidePopupMenu()
+            }
+            else -> {
+                super.onBackPressed()
             }
         }
     }
