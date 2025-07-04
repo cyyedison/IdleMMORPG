@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/game_background">
@@ -323,15 +324,17 @@
         android:id="@+id/inventoryOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_above="@+id/bottomNavigation"
         android:background="#CC000000"
+        android:clickable="true"
         android:visibility="gone"
-        android:clickable="true">
+        tools:visibility="gone">
 
         <FrameLayout
             android:id="@+id/inventoryContainer"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_margin="20dp"
+            android:layout_margin="30dp"
             android:background="@drawable/popup_game_background">
 
             <!-- InventoryView 會動態添加到這裡 -->

@@ -10,17 +10,17 @@ import kotlin.math.floor
 
 class InventoryView(context: Context, private val gameManager: GameManager) : View(context) {
 
-    // 背包配置 - 修改為8列5行
-    private val INVENTORY_COLS = 8
+    // 背包配置 - 改為5x5，更大的方格
+    private val INVENTORY_COLS = 5
     private val INVENTORY_ROWS = 5
-    private val SLOT_SIZE = 100f  // 增大槽位尺寸
-    private val SLOT_PADDING = 6f
+    private val SLOT_SIZE = 140f  // 進一步增大槽位尺寸
+    private val SLOT_PADDING = 8f
 
     // 區域配置
     private var inventoryAreaTop = 80f  // 給標題留出更多空間
     private var equipmentAreaTop = 0f
     private var detailAreaTop = 0f
-    private var detailAreaHeight = 180f  // 增大詳細信息區域高度
+    private var detailAreaHeight = 200f  // 增大詳細信息區域高度
 
     // 選中的物品
     private var selectedItem: InventoryItem? = null
@@ -37,6 +37,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
         color = Color.parseColor("#3C4043")
         style = Paint.Style.FILL
         isAntiAlias = true
+        alpha = 150
     }
 
     private val slotBorderPaint = Paint().apply {
@@ -44,6 +45,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
         style = Paint.Style.STROKE
         strokeWidth = 2f
         isAntiAlias = true
+        alpha = 180
     }
 
     private val selectedSlotPaint = Paint().apply {
@@ -55,7 +57,7 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
 
     private val textPaint = Paint().apply {
         color = Color.WHITE
-        textSize = 42f  // 增大字體
+        textSize = 54f  // 增大字體
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
@@ -63,14 +65,14 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
 
     private val smallTextPaint = Paint().apply {
         color = Color.WHITE
-        textSize = 28f  // 增大字體
+        textSize = 48f  // 增大字體
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
 
     private val countTextPaint = Paint().apply {
         color = Color.parseColor("#FFD700")
-        textSize = 22f  // 增大字體
+        textSize = 32f  // 增大字體
         isAntiAlias = true
         textAlign = Paint.Align.RIGHT
         typeface = Typeface.DEFAULT_BOLD
@@ -209,9 +211,9 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
         super.onSizeChanged(w, h, oldw, oldh)
 
         val padding = 30f
-        inventoryAreaTop = padding + 50f  // 為標題留出空間
+        inventoryAreaTop = padding + 90f  // 為標題留出空間
         detailAreaTop = inventoryAreaTop + (INVENTORY_ROWS * (SLOT_SIZE + SLOT_PADDING)) + 30f
-        equipmentAreaTop = detailAreaTop + detailAreaHeight + 30f
+        equipmentAreaTop = detailAreaTop + detailAreaHeight + 70f
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -295,14 +297,14 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
         if (selectedItem != null) {
             val item = selectedItem!!
             val centerX = detailX + detailWidth / 2
-            val textY = detailY + 45f  // 調整文字位置
+            val textY = detailY + 55f  // 調整文字位置
 
             // 物品圖標和名稱
-            val iconPaint = Paint(textPaint).apply { textSize = 48f }
-            canvas.drawText(item.emoji, centerX - 80f, textY + 5f, iconPaint)
+            val iconPaint = Paint(textPaint).apply { textSize = 60f }  // 更大圖標
+            canvas.drawText(item.emoji, centerX - 100f, textY + 5f, iconPaint)
 
-            val namePaint = Paint(textPaint).apply { textSize = 32f }
-            canvas.drawText(item.name, centerX + 40f, textY, namePaint)
+            val namePaint = Paint(textPaint).apply { textSize = 36f }  // 更大名稱
+            canvas.drawText(item.name, centerX + 60f, textY, namePaint)
 
             // 物品詳細信息
             val details = when (item.type) {
@@ -320,7 +322,8 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 }
             }
 
-            canvas.drawText(details, centerX, textY + 50f, smallTextPaint)
+            val detailPaint = Paint(smallTextPaint).apply { textSize = 36f }  // 更大詳細信息
+            canvas.drawText(details, centerX, textY + 60f, detailPaint)
 
             // 操作提示
             val actionHint = when (item.type) {
@@ -329,12 +332,13 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
                 ItemType.POTION -> "點擊此物品使用藥品"
             }
 
-            canvas.drawText(actionHint, centerX, textY + 90f, smallTextPaint)
+            val hintPaint = Paint(smallTextPaint).apply { textSize = 32f }  // 更大提示文字
+            canvas.drawText(actionHint, centerX, textY + 100f, hintPaint)
 
         } else {
-            val hintPaint = Paint(smallTextPaint).apply { textSize = 24f }
+            val hintPaint = Paint(smallTextPaint).apply { textSize = 28f }
             canvas.drawText(
-                "點擊背包中的物品查看詳細信息",
+                "",
                 detailX + detailWidth / 2,
                 detailY + detailAreaHeight / 2,
                 hintPaint
@@ -345,11 +349,11 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
     private fun drawEquipmentArea(canvas: Canvas) {
         val centerX = width / 2f
         val humanoidY = equipmentAreaTop + 60f  // 增加間距
-        val humanoidWidth = 180f  // 放大人形
-        val humanoidHeight = 300f  // 放大人形
+        val humanoidWidth = 360f  // 人形放大兩倍（原180f）
+        val humanoidHeight = 600f  // 人形放大兩倍（原300f）
 
         // 繪製裝備區域標題
-        val titlePaint = Paint(textPaint).apply { textSize = 48f }
+        val titlePaint = Paint(textPaint).apply { textSize = 52f }
         canvas.drawText("⚔️ 裝備", centerX, equipmentAreaTop + 20f, titlePaint)
 
         // 繪製人形圖
@@ -437,15 +441,15 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
     }
 
     private fun drawEquipmentSlots(canvas: Canvas, centerX: Float, humanoidY: Float, width: Float, height: Float) {
-        val slotSize = SLOT_SIZE * 1.0f  // 使用完整槽位大小
+        val slotSize = SLOT_SIZE * 1.2f  // 槽位也放大
 
         val slots = mapOf(
-            EquipmentSlot.HELMET to Pair(centerX - slotSize/2, humanoidY - slotSize/2),
-            EquipmentSlot.CHEST to Pair(centerX - slotSize/2, humanoidY + height * 0.3f - slotSize/2),
-            EquipmentSlot.GLOVES to Pair(centerX - width/2 - slotSize - 15f, humanoidY + height * 0.25f - slotSize/2),
-            EquipmentSlot.WEAPON to Pair(centerX + width/2 + 15f, humanoidY + height * 0.25f - slotSize/2),
-            EquipmentSlot.LEGS to Pair(centerX - slotSize/2, humanoidY + height * 0.7f - slotSize/2),
-            EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + height * 0.95f - slotSize/2)
+            EquipmentSlot.HELMET to Pair(centerX - slotSize/2, humanoidY),
+            EquipmentSlot.CHEST to Pair(centerX - slotSize/2, humanoidY + height * 0.5f - slotSize/2),
+            EquipmentSlot.GLOVES to Pair(centerX - width/2 - slotSize - 20f, humanoidY + height * 0.6f - slotSize/2),
+            EquipmentSlot.WEAPON to Pair(centerX + width/2 + 20f, humanoidY + height * 0.6f - slotSize/2),
+            EquipmentSlot.LEGS to Pair(centerX - slotSize/2, humanoidY + height * 0.8f - slotSize/2),
+            EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + height)
         )
 
         slots.forEach { (slot, position) ->
@@ -453,30 +457,30 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             val y = position.second
 
             // 繪製槽位背景
-            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 8f, 8f, slotPaint)
-            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 8f, 8f, slotBorderPaint)
+            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 10f, 10f, slotPaint)
+            canvas.drawRoundRect(x, y, x + slotSize, y + slotSize, 10f, 10f, slotBorderPaint)
 
             // 繪製裝備或空槽位標識
             val item = equipmentSlots[slot]
             if (item != null) {
                 // 繪製裝備圖標
-                val iconPaint = Paint(textPaint).apply { textSize = 36f }
+                val iconPaint = Paint(textPaint).apply { textSize = 48f }  // 更大圖標
                 canvas.drawText(
                     item.emoji,
                     x + slotSize / 2,
-                    y + slotSize / 2 + 12f,
+                    y + slotSize / 2 + 16f,
                     iconPaint
                 )
             } else {
                 // 繪製空槽位標識
                 val labelPaint = Paint(smallTextPaint).apply {
-                    textSize = 18f
+                    textSize = 36f  // 更大文字
                     textAlign = Paint.Align.CENTER
                 }
                 canvas.drawText(
                     slot.displayName,
                     x + slotSize / 2,
-                    y + slotSize / 2 + 6f,
+                    y + slotSize / 2 + 8f,
                     labelPaint
                 )
             }
@@ -535,12 +539,12 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             val slotSize = SLOT_SIZE * 0.8f
 
             val slots = mapOf(
-                EquipmentSlot.HELMET to Pair(centerX - slotSize/2, humanoidY - slotSize/2),
-                EquipmentSlot.CHEST to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.3f - slotSize/2),
-                EquipmentSlot.GLOVES to Pair(centerX - humanoidWidth/2 - slotSize - 10f, humanoidY + humanoidHeight * 0.25f - slotSize/2),
-                EquipmentSlot.WEAPON to Pair(centerX + humanoidWidth/2 + 10f, humanoidY + humanoidHeight * 0.25f - slotSize/2),
-                EquipmentSlot.LEGS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.7f - slotSize/2),
-                EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.95f - slotSize/2)
+                EquipmentSlot.HELMET to Pair(centerX - slotSize/2, humanoidY),
+                EquipmentSlot.CHEST to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.5f - slotSize/2),
+                EquipmentSlot.GLOVES to Pair(centerX - humanoidWidth/2 - slotSize - 20f, humanoidY + humanoidHeight * 0.6f - slotSize/2),
+                EquipmentSlot.WEAPON to Pair(centerX + humanoidWidth/2 + 20f, humanoidY + humanoidHeight * 0.6f - slotSize/2),
+                EquipmentSlot.LEGS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight * 0.8f - slotSize/2),
+                EquipmentSlot.BOOTS to Pair(centerX - slotSize/2, humanoidY + humanoidHeight)
             )
 
             // 檢查點擊的裝備槽位
