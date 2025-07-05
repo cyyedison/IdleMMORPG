@@ -701,33 +701,40 @@ class InventoryView(context: Context, private val gameManager: GameManager) : Vi
             return // 背包已滿，不能卸下
         }
 
-        // 從裝備槽移除
-        equipmentSlots[slot] = null
-
-        // 更新玩家屬性
-        when (slot) {
+        // 使用 GameManager 的方法來卸下裝備
+        val unequipped = when (slot) {
             EquipmentSlot.WEAPON -> {
-                gameManager.player.weaponAttack = 0
+                gameManager.unequipWeapon()
             }
             EquipmentSlot.CHEST -> {
-                gameManager.player.armorDefense = 0
+                gameManager.unequipArmor()
             }
             else -> {
                 // 其他槽位暫時不處理
+                false
             }
         }
 
-        // 清除選中狀態
-        selectedItem = null
-        selectedEquipmentSlot = null
-        selectedSlot = null
+        if (unequipped) {
+            // 從裝備槽移除
+            equipmentSlots[slot] = null
 
-        // 更新遊戲狀態
-        gameManager.saveGameState()
-        refreshDisplay()
-        notifyMainActivity()
+            // 清除選中狀態
+            selectedItem = null
+            selectedEquipmentSlot = null
+            selectedSlot = null
 
-        Toast.makeText(context, "✅ 卸下 ${item.name} 成功！", Toast.LENGTH_SHORT).show()
+            // 重新加載物品以反映更改
+            loadPlayerItems()
+            refreshDisplay()
+            notifyMainActivity()
+
+            Toast.makeText(context, "✅ 卸下 ${item.name} 成功！", Toast.LENGTH_SHORT).show()
+        } else {
+            // 如果卸下失敗，從背包移除已添加的物品
+            removeItemFromInventory(item)
+            Toast.makeText(context, "❌ 卸下裝備失敗", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun equipWeapon(item: InventoryItem) {

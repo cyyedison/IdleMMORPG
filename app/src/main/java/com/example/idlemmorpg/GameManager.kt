@@ -62,11 +62,11 @@ class GameManager(private val context: Context) {
     // 卸下装备的方法
     fun unequipWeapon(): Boolean {
         if (player.weaponAttack > 0) {
+            // 先找到武器，再將攻擊力設為0
             val weapon = UIHelpers.GameData.WEAPONS.find { it.attack == player.weaponAttack }
             weapon?.let {
-                // 先將武器攻擊力設為0，再添加到庫存
-                player.weaponAttack = 0
                 inventoryWeapons.add(it)
+                player.weaponAttack = 0  // 找到武器後才設為0
                 saveGameState()
 
                 // 調試信息
@@ -82,11 +82,11 @@ class GameManager(private val context: Context) {
 
     fun unequipArmor(): Boolean {
         if (player.armorDefense > 0) {
+            // 先找到防具，再將防禦力設為0
             val armor = UIHelpers.GameData.ARMORS.find { it.defense == player.armorDefense }
             armor?.let {
-                // 先將防具防禦力設為0，再添加到庫存
-                player.armorDefense = 0
                 inventoryArmors.add(it)
+                player.armorDefense = 0  // 找到防具後才設為0
                 saveGameState()
 
                 // 調試信息
