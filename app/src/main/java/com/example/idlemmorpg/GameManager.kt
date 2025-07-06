@@ -45,15 +45,25 @@ class GameManager(private val context: Context) {
     }
 
     fun removeWeaponFromInventory(weapon: Weapon): Boolean {
-        val removed = inventoryWeapons.removeAll { it.name == weapon.name && it.attack == weapon.attack }
-        if (removed) saveGameState()
-        return removed
+        // 使用 indexOfFirst 找到第一個匹配的武器，然後只移除一個
+        val index = inventoryWeapons.indexOfFirst { it.name == weapon.name && it.attack == weapon.attack }
+        if (index != -1) {
+            inventoryWeapons.removeAt(index)
+            saveGameState()
+            return true
+        }
+        return false
     }
 
     fun removeArmorFromInventory(armor: Armor): Boolean {
-        val removed = inventoryArmors.removeAll { it.name == armor.name && it.defense == armor.defense }
-        if (removed) saveGameState()
-        return removed
+        // 使用 indexOfFirst 找到第一個匹配的防具，然後只移除一個
+        val index = inventoryArmors.indexOfFirst { it.name == armor.name && it.defense == armor.defense }
+        if (index != -1) {
+            inventoryArmors.removeAt(index)
+            saveGameState()
+            return true
+        }
+        return false
     }
 
     fun getInventoryWeapons(): List<Weapon> = inventoryWeapons.toList()
