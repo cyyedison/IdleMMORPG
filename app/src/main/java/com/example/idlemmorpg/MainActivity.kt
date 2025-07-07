@@ -1,16 +1,22 @@
 package com.example.idlemmorpg
 
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
+import android.text.InputType
+import android.view.Gravity
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import android.graphics.Color
-import android.view.Gravity
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.example.idlemmorpg.network.ServerItemData
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var gameManager: GameManager
+    private lateinit var serverGameManager: ServerGameManager
 
     // UI元素
     private lateinit var avatarButton: ImageView
@@ -40,13 +46,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inventoryOverlay: FrameLayout
 
     companion object {
-        // 添加 ID 常量避免編譯錯誤
         private const val INVENTORY_VIEW_ID = 999001
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
         // 全屏設置
         supportActionBar?.hide()
         window.decorView.systemUiVisibility = (
@@ -57,13 +62,17 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main_new)
 
-        gameManager = GameManager(this)
+        serverGameManager = ServerGameManager(this)
         initViews()
         setupNavigation()
-        updateUI()
-        showMainCity()
+        
+        // 檢查是否已登入
+        checkLoginStatus()
+        
+        // 開始定期同步
+        startPeriodicSync()
     }
-
+    
     private fun initViews() {
         // 頂部狀態元素
         avatarButton = findViewById(R.id.avatarButton)
@@ -94,13 +103,12 @@ class MainActivity : AppCompatActivity() {
 
         setupClickListeners()
     }
-
+    
     private fun setupClickListeners() {
         popupRecyclerView.layoutManager = LinearLayoutManager(this)
 
         // 头像点击
         avatarButton.setOnClickListener {
-            // 如果背包界面开启，先关闭
             if (inventoryOverlay.visibility == View.VISIBLE) {
                 hideInventoryPopup()
             }
@@ -115,39 +123,255 @@ class MainActivity : AppCompatActivity() {
         btnClosePlayerInfo.setOnClickListener { hidePlayerInfoPanel() }
         playerInfoOverlay.setOnClickListener { hidePlayerInfoPanel() }
 
-        // 背包弹出窗关闭 - 修改这部分
+        // 背包弹出窗关闭
         inventoryOverlay.setOnClickListener { event ->
-            // 获取点击位置
             val x = event.x
             val y = event.y
-
-            // 获取inventoryContainer的位置
             val inventoryContainer = inventoryOverlay.findViewById<FrameLayout>(R.id.inventoryContainer)
             val location = IntArray(2)
             inventoryContainer.getLocationOnScreen(location)
 
-            // 检查点击是否在inventoryContainer外部
             if (x < location[0] || x > location[0] + inventoryContainer.width ||
                 y < location[1] || y > location[1] + inventoryContainer.height) {
                 hideInventoryPopup()
             }
         }
     }
-
+    
+    private fun checkLoginStatus() {
+        lifecycleScope.launch {
+            try {
+                if (serverGameManager.needsLogin()) {
+                    showLoginScreen()
+                } else {
+                    serverGameManager.autoSync()
+                    updateUI()
+                    showMainCity()
+                }
+            } catch (e: Exception) {
+                showLoginScreen()
+            }
+        }
+    }
+    
+    private fun showLoginScreen() {
+        val loginView = createLoginView()
+        mainDisplayArea.removeAllViews()
+        mainDisplayArea.addView(loginView)
+        
+        // 隱藏導航按鈕（登入時不需要）
+        findViewById<LinearLayout>(R.id.bottomNavigation).visibility = View.GONE
+    }
+    
+    private fun showMainGameUI() {
+        // 顯示導航按鈕
+        findViewById<LinearLayout>(R.id.bottomNavigation).visibility = View.VISIBLE
+        updateUI()
+        showMainCity()
+    }
+    
+    private fun createLoginView(): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
+            setBackgroundColor(Color.parseColor("#1A252F"))
+            
+            val titleText = TextView(this@MainActivity).apply {
+                text = "🏰 閒置MMORPG 🏰"
+                textSize = 28f
+                setTextColor(Color.parseColor("#FFD700"))
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 48)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            
+            val subtitleText = TextView(this@MainActivity).apply {
+                text = "🌐 連線到遊戲服務器"
+                textSize = 16f
+                setTextColor(Color.parseColor("#CCCCCC"))
+                gravity = Gravity.CENTER
+                setPadding(0, 0, 0, 32)
+            }
+            
+            val usernameInput = EditText(this@MainActivity).apply {
+                hint = "請輸入用戶名"
+                setPadding(16, 16, 16, 16)
+                setBackgroundColor(Color.parseColor("#40FFFFFF"))
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.parseColor("#CCCCCC"))
+                textSize = 16f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    140
+                ).apply { bottomMargin = 16 }
+            }
+            
+            val passwordInput = EditText(this@MainActivity).apply {
+                hint = "請輸入密碼"
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                setPadding(16, 16, 16, 16)
+                setBackgroundColor(Color.parseColor("#40FFFFFF"))
+                setTextColor(Color.WHITE)
+                setHintTextColor(Color.parseColor("#CCCCCC"))
+                textSize = 16f
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    140
+                ).apply { bottomMargin = 24 }
+            }
+            
+            val loginButton = Button(this@MainActivity).apply {
+                text = "🗡️ 登入遊戲"
+                setBackgroundColor(Color.parseColor("#4CAF50"))
+                setTextColor(Color.WHITE)
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    160
+                ).apply { bottomMargin = 16 }
+                
+                setOnClickListener {
+                    val username = usernameInput.text.toString().trim()
+                    val password = passwordInput.text.toString().trim()
+                    
+                    if (username.isNotEmpty() && password.isNotEmpty()) {
+                        performLogin(username, password)
+                    } else {
+                        Toast.makeText(this@MainActivity, "請輸入用戶名和密碼", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            
+            val registerButton = Button(this@MainActivity).apply {
+                text = "⚔️ 註冊新帳戶"
+                setBackgroundColor(Color.parseColor("#2196F3"))
+                setTextColor(Color.WHITE)
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    160
+                ).apply { bottomMargin = 24 }
+                
+                setOnClickListener {
+                    val username = usernameInput.text.toString().trim()
+                    val password = passwordInput.text.toString().trim()
+                    
+                    if (username.isNotEmpty() && password.isNotEmpty()) {
+                        if (password.length < 6) {
+                            Toast.makeText(this@MainActivity, "密碼至少需要6個字符", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        performRegister(username, password)
+                    } else {
+                        Toast.makeText(this@MainActivity, "請輸入用戶名和密碼", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            
+            val connectionText = TextView(this@MainActivity).apply {
+                text = "💡 需要網路連接到遊戲服務器"
+                textSize = 14f
+                setTextColor(Color.parseColor("#888888"))
+                gravity = Gravity.CENTER
+                setPadding(16, 16, 16, 16)
+            }
+            
+            addView(titleText)
+            addView(subtitleText)
+            addView(usernameInput)
+            addView(passwordInput)
+            addView(loginButton)
+            addView(registerButton)
+            addView(connectionText)
+        }
+    }
+    
+    private fun performLogin(username: String, password: String) {
+        val loadingDialog = createLoadingDialog("連接服務器中...")
+        loadingDialog.show()
+        
+        lifecycleScope.launch {
+            try {
+                val result = serverGameManager.login(username, password)
+                loadingDialog.dismiss()
+                
+                if (result.isSuccess) {
+                    Toast.makeText(this@MainActivity, "登入成功！歡迎回來", Toast.LENGTH_SHORT).show()
+                    showMainGameUI()
+                } else {
+                    val errorMessage = result.exceptionOrNull()?.message ?: "登入失敗"
+                    Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                loadingDialog.dismiss()
+                Toast.makeText(this@MainActivity, "網路連接失敗：${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    
+    private fun performRegister(username: String, password: String) {
+        val loadingDialog = createLoadingDialog("註冊中...")
+        loadingDialog.show()
+        
+        lifecycleScope.launch {
+            try {
+                val result = serverGameManager.register(username, password)
+                loadingDialog.dismiss()
+                
+                if (result.isSuccess) {
+                    Toast.makeText(this@MainActivity, "註冊成功！請登入", Toast.LENGTH_SHORT).show()
+                } else {
+                    val errorMessage = result.exceptionOrNull()?.message ?: "註冊失敗"
+                    Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                loadingDialog.dismiss()
+                Toast.makeText(this@MainActivity, "網路連接失敗：${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    
+    private fun createLoadingDialog(message: String): android.app.AlertDialog {
+        val builder = android.app.AlertDialog.Builder(this)
+        val view = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(32, 32, 32, 32)
+            
+            val progressBar = ProgressBar(this@MainActivity).apply {
+                layoutParams = LinearLayout.LayoutParams(64, 64).apply { 
+                    rightMargin = 16 
+                }
+            }
+            
+            val textView = TextView(this@MainActivity).apply {
+                text = message
+                textSize = 16f
+                setTextColor(Color.BLACK)
+            }
+            
+            addView(progressBar)
+            addView(textView)
+        }
+        
+        return builder.setView(view)
+            .setCancelable(false)
+            .create()
+    }
+    
     private fun setupNavigation() {
         btnInventory.setOnClickListener {
-            // 检查背包界面是否已经显示
             if (inventoryOverlay.visibility == View.VISIBLE) {
-                // 如果已显示，则关闭
                 hideInventoryPopup()
             } else {
-                // 如果未显示，则显示背包
                 showInventory()
             }
         }
 
         btnTraining.setOnClickListener {
-            // 如果背包界面开启，先关闭
             if (inventoryOverlay.visibility == View.VISIBLE) {
                 hideInventoryPopup()
             }
@@ -156,7 +380,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnShop.setOnClickListener {
-            // 如果背包界面开启，先关闭
             if (inventoryOverlay.visibility == View.VISIBLE) {
                 hideInventoryPopup()
             }
@@ -165,13 +388,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnSettings.setOnClickListener {
-            // 如果背包界面开启，先关闭
             if (inventoryOverlay.visibility == View.VISIBLE) {
                 hideInventoryPopup()
             }
             updateButtonSelection(btnSettings)
-            gameManager.changeLocation("settings")
-            updateUI()
             showSettings()
             hidePopupMenu()
         }
@@ -185,7 +405,7 @@ class MainActivity : AppCompatActivity() {
     private fun showTrainingPopup() {
         popupTitle.text = "⚔️ 選擇練功樓"
         popupRecyclerView.adapter = PopupMenuAdapter(UIHelpers.GameData.TRAINING_LOCATIONS) { location ->
-            gameManager.changeLocation(location)
+            // 這裡可以添加改變位置的API調用
             updateUI()
             showTrainingGround()
             hidePopupMenu()
@@ -196,7 +416,6 @@ class MainActivity : AppCompatActivity() {
     private fun showShopPopup() {
         popupTitle.text = "🏪 選擇商店"
         popupRecyclerView.adapter = PopupMenuAdapter(UIHelpers.GameData.SHOP_LOCATIONS) { location ->
-            gameManager.changeLocation(location)
             updateUI()
             when (location) {
                 "weaponShop" -> showWeaponShop()
@@ -219,12 +438,348 @@ class MainActivity : AppCompatActivity() {
             overlayContainer.visibility = View.GONE
         }.start()
     }
+    
+    // 修改戰鬥按鈕處理 - 使用服務器API
+    private fun createTrainingButtons(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            setPadding(16, 16, 16, 16)
+
+            val startButton = Button(this@MainActivity).apply {
+                text = "🎯 開始自動打怪"
+                setBackgroundColor(UIHelpers.Colors.GREEN)
+                setTextColor(UIHelpers.Colors.WHITE)
+                setPadding(20, 15, 20, 15)
+                textSize = 16f
+                typeface = Typeface.DEFAULT_BOLD
+                
+                setOnClickListener {
+                    if (!serverGameManager.isLoggedIn) {
+                        Toast.makeText(this@MainActivity, "請先登入", Toast.LENGTH_SHORT).show()
+                        showLoginScreen()
+                        return@setOnClickListener
+                    }
+                    
+                    lifecycleScope.launch {
+                        try {
+                            val result = serverGameManager.startAutoBattle()
+                            if (result.isSuccess) {
+                                Toast.makeText(this@MainActivity, "開始自動戰鬥！", Toast.LENGTH_SHORT).show()
+                                updateUI()
+                                showTrainingGround()
+                            } else {
+                                Toast.makeText(this@MainActivity, "開始戰鬥失敗：${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+
+            val stopButton = Button(this@MainActivity).apply {
+                text = "⏹️ 停止打怪"
+                setBackgroundColor(UIHelpers.Colors.RED)
+                setTextColor(UIHelpers.Colors.WHITE)
+                setPadding(20, 15, 20, 15)
+                textSize = 16f
+                typeface = Typeface.DEFAULT_BOLD
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(20, 0, 0, 0)
+                }
+                
+                setOnClickListener {
+                    if (!serverGameManager.isLoggedIn) {
+                        Toast.makeText(this@MainActivity, "請先登入", Toast.LENGTH_SHORT).show()
+                        showLoginScreen()
+                        return@setOnClickListener
+                    }
+                    
+                    lifecycleScope.launch {
+                        try {
+                            val result = serverGameManager.stopAutoBattle()
+                            if (result.isSuccess) {
+                                val rewards = result.getOrNull()!!
+                                val message = if (rewards.monstersKilled > 0) {
+                                    "停止戰鬥！獲得經驗：${rewards.experience}，金幣：${rewards.gold}，擊殺：${rewards.monstersKilled}隻怪物"
+                                } else {
+                                    "停止戰鬥！"
+                                }
+                                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                                updateUI()
+                                showTrainingGround()
+                            } else {
+                                Toast.makeText(this@MainActivity, "停止戰鬥失敗：${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+
+            addView(startButton)
+            addView(stopButton)
+        }
+    }
+    
+    // 修改商店功能 - 使用服務器API
+    private fun showWeaponShop() {
+        clearMainDisplay()
+        
+        lifecycleScope.launch {
+            try {
+                val shopItems = serverGameManager.getShopItems()
+                if (shopItems.isSuccess) {
+                    val weapons = shopItems.getOrNull()?.filter { it.type == "WEAPON" } ?: emptyList()
+                    val contentView = createServerShopContent(
+                        "⚔️ 五金鋪 - 武器商店 ⚔️",
+                        "目前武器攻擊力: +${serverGameManager.player?.weaponAttack ?: 0}",
+                        weapons
+                    ) { weaponData ->
+                        buyItemFromServer(weaponData, 1) {
+                            showWeaponShop()
+                        }
+                    }
+                    mainDisplayArea.addView(contentView)
+                } else {
+                    Toast.makeText(this@MainActivity, "載入商店失敗", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showArmorShop() {
+        clearMainDisplay()
+        
+        lifecycleScope.launch {
+            try {
+                val shopItems = serverGameManager.getShopItems()
+                if (shopItems.isSuccess) {
+                    val armors = shopItems.getOrNull()?.filter { it.type == "ARMOR" } ?: emptyList()
+                    val contentView = createServerShopContent(
+                        "🛡️ 衣服店 - 防具商店 🛡️",
+                        "目前防具防禦力: +${serverGameManager.player?.armorDefense ?: 0}",
+                        armors
+                    ) { armorData ->
+                        buyItemFromServer(armorData, 1) {
+                            showArmorShop()
+                        }
+                    }
+                    mainDisplayArea.addView(contentView)
+                } else {
+                    Toast.makeText(this@MainActivity, "載入商店失敗", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun showConvenienceStore() {
+        clearMainDisplay()
+        
+        lifecycleScope.launch {
+            try {
+                val shopItems = serverGameManager.getShopItems()
+                if (shopItems.isSuccess) {
+                    val potions = shopItems.getOrNull()?.filter { it.type == "POTION" } ?: emptyList()
+                    val contentView = createPotionServerShopContent(potions)
+                    mainDisplayArea.addView(contentView)
+                } else {
+                    Toast.makeText(this@MainActivity, "載入商店失敗", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // 從服務器購買物品
+    private fun buyItemFromServer(itemData: ServerItemData, quantity: Int, onSuccess: () -> Unit) {
+        lifecycleScope.launch {
+            try {
+                val result = serverGameManager.buyItem(itemData.id, quantity)
+                if (result.isSuccess) {
+                    Toast.makeText(this@MainActivity, "✅ 購買${itemData.name}成功！", Toast.LENGTH_SHORT).show()
+                    updateUI()
+                    onSuccess()
+                } else {
+                    Toast.makeText(this@MainActivity, "❌ ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "網路錯誤：${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // 創建服務器商店內容
+    private fun createServerShopContent(
+        title: String, 
+        currentStatus: String, 
+        items: List<ServerItemData>,
+        onBuyClick: (ServerItemData) -> Unit
+    ): ScrollView {
+        return ScrollView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(16, 16, 16, 16)
+
+            val contentLayout = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+
+            contentLayout.addView(createShopTitle(title))
+            contentLayout.addView(createStatusText(currentStatus))
+
+            items.forEach { item ->
+                contentLayout.addView(createServerShopButton(item, onBuyClick))
+            }
+
+            addView(contentLayout)
+        }
+    }
+
+    private fun createServerShopButton(
+        item: ServerItemData, 
+        onBuyClick: (ServerItemData) -> Unit
+    ): Button {
+        return Button(this).apply {
+            when (item.type) {
+                "WEAPON" -> {
+                    text = "${item.name}\n攻擊+${item.attack} - ${item.price}💰"
+                    setBackgroundColor(UIHelpers.Colors.GOLD)
+                    setTextColor(UIHelpers.Colors.BROWN)
+                }
+                "ARMOR" -> {
+                    text = "${item.name}\n防禦+${item.defense} - ${item.price}💰"
+                    setBackgroundColor(UIHelpers.Colors.LIGHT_BLUE)
+                    setTextColor(UIHelpers.Colors.DARK_BLUE)
+                }
+                "POTION" -> {
+                    text = "${item.name}\n回復${item.healAmount}HP - ${item.price}💰"
+                    setBackgroundColor(UIHelpers.Colors.LIGHT_GREEN)
+                    setTextColor(UIHelpers.Colors.DARK_GREEN)
+                }
+            }
+            setPadding(16, 12, 16, 12)
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 8, 0, 8)
+            }
+            setOnClickListener { 
+                if (!serverGameManager.isLoggedIn) {
+                    Toast.makeText(this@MainActivity, "請先登入", Toast.LENGTH_SHORT).show()
+                    showLoginScreen()
+                    return@setOnClickListener
+                }
+                onBuyClick(item) 
+            }
+        }
+    }
+
+    private fun createPotionServerShopContent(potions: List<ServerItemData>): ScrollView {
+        return ScrollView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(16, 16, 16, 16)
+
+            val contentLayout = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+
+            contentLayout.addView(createShopTitle("🏪 便利店 - 回血藥品 🧪"))
+            contentLayout.addView(createPotionIntro())
+
+            potions.forEach { potion ->
+                contentLayout.addView(createPotionServerContainer(potion))
+            }
+
+            addView(contentLayout)
+        }
+    }
+
+    private fun createPotionServerContainer(potion: ServerItemData): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(8, 8, 8, 8)
+            setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_GREEN)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 8, 0, 8)
+            }
+
+            val potionInfo = TextView(this@MainActivity).apply {
+                text = "${potion.name}\n${potion.description}"
+                textSize = 14f
+                setTextColor(UIHelpers.Colors.WHITE)
+                setPadding(8, 8, 8, 8)
+            }
+
+            val buttonLayout = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+
+            val buyOneButton = Button(this@MainActivity).apply {
+                text = "買1個\n${potion.price}💰"
+                setBackgroundColor(UIHelpers.Colors.LIGHT_GREEN)
+                setTextColor(UIHelpers.Colors.DARK_GREEN)
+                setPadding(12, 8, 12, 8)
+                setOnClickListener {
+                    buyItemFromServer(potion, 1) {
+                        showConvenienceStore()
+                    }
+                }
+            }
+
+            val buyTenButton = Button(this@MainActivity).apply {
+                text = "買10個\n${potion.price * 10}💰"
+                setBackgroundColor(Color.parseColor("#90EE90"))
+                setTextColor(UIHelpers.Colors.DARK_GREEN)
+                setPadding(12, 8, 12, 8)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(16, 0, 0, 0)
+                }
+                setOnClickListener {
+                    buyItemFromServer(potion, 10) {
+                        showConvenienceStore()
+                    }
+                }
+            }
+
+            buttonLayout.addView(buyOneButton)
+            buttonLayout.addView(buyTenButton)
+
+            addView(potionInfo)
+            addView(buttonLayout)
+        }
+    }
+    
+    private fun updateUI() {
+        val player = serverGameManager.player
+        if (player != null) {
+            locationText.text = UIHelpers.getLocationDisplayName("mainCity")
+
+            val healthProgress = (player.currentHp.toFloat() / player.maxHp.toFloat() * 100).toInt()
+            healthBar.progress = healthProgress
+
+            val expProgress = (player.experience.toFloat() / player.experienceToNextLevel.toFloat() * 100).toInt()
+            expBar.progress = expProgress
+        }
+    }
 
     private fun showPlayerInfoPanel() {
-        val player = gameManager.player
-        val potionText = if (player.potions.isEmpty()) "無藥品"
-        else player.potions.entries.joinToString("\n") { "${it.key.name}: ${it.value}個" }
-
+        val player = serverGameManager.player
+        if (player == null) {
+            Toast.makeText(this, "請先登入", Toast.LENGTH_SHORT).show()
+            showLoginScreen()
+            return
+        }
+        
         playerInfoText.text = """
             👤 玩家詳細資訊
             
@@ -235,12 +790,8 @@ class MainActivity : AppCompatActivity() {
             🛡️ 防禦力: ${player.defense} (基礎${player.baseDefense} + 防具${player.armorDefense})
             💰 金幣: ${player.gold}
             
-            🧪 藥品庫存:
-            $potionText
-            
-            📊 戰鬥統計:
-            • 自動戰鬥狀態: ${if (gameManager.isAutoBattling()) "進行中" else "已停止"}
-            • 目前位置: ${UIHelpers.getLocationDisplayName(gameManager.currentLocation)}
+            🌐 在線狀態: ${if (serverGameManager.isLoggedIn) "已連線" else "離線"}
+            🎮 玩家ID: ${serverGameManager.getCurrentPlayerId() ?: "未知"}
         """.trimIndent()
 
         playerInfoOverlay.visibility = View.VISIBLE
@@ -254,22 +805,107 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun updateUI() {
-        val player = gameManager.player
-        locationText.text = UIHelpers.getLocationDisplayName(gameManager.currentLocation)
-
-        val healthProgress = (player.currentHp.toFloat() / player.maxHp.toFloat() * 100).toInt()
-        healthBar.progress = healthProgress
-
-        val expProgress = (player.experience.toFloat() / player.experienceToNextLevel.toFloat() * 100).toInt()
-        expBar.progress = expProgress
+    private fun showSettings() {
+        clearMainDisplay()
+        val contentView = createSettingsContent()
+        mainDisplayArea.addView(contentView)
     }
 
+    private fun createSettingsContent(): ScrollView {
+        return ScrollView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            setPadding(16, 16, 16, 16)
+
+            val contentLayout = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            }
+
+            contentLayout.addView(createShopTitle("⚙️ 遊戲設定 ⚙️"))
+
+            val settingsText = TextView(this@MainActivity).apply {
+                text = """
+                    🎮 閒置MMORPG - 服務器版本
+                    版本: 2.0.0
+                    
+                    🛠️ 功能說明:
+                    • 服務器端遊戲邏輯
+                    • 防作弊系統
+                    • 多人同步遊戲
+                    • 雲端資料儲存
+                    
+                    📱 遊戲特色:
+                    • 所有數據都在服務器計算
+                    • 真正的多人遊戲體驗
+                    • 防止外掛和作弊
+                    • 跨設備資料同步
+                    
+                    🌐 網路狀態: ${if (serverGameManager.isLoggedIn) "已連線" else "未連線"}
+                """.trimIndent()
+                textSize = 16f
+                setTextColor(UIHelpers.Colors.WHITE)
+                setPadding(16, 16, 16, 20)
+                setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_GRAY)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    bottomMargin = 24
+                }
+            }
+
+            val logoutButton = Button(this@MainActivity).apply {
+                text = "🚪 登出遊戲"
+                setBackgroundColor(Color.parseColor("#F44336"))
+                setTextColor(Color.WHITE)
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(20, 15, 20, 15)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 160)
+                
+                setOnClickListener {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle("確認登出")
+                        .setMessage("確定要登出遊戲嗎？")
+                        .setPositiveButton("確定") { _, _ ->
+                            serverGameManager.logout()
+                            Toast.makeText(this@MainActivity, "已登出", Toast.LENGTH_SHORT).show()
+                            showLoginScreen()
+                        }
+                        .setNegativeButton("取消", null)
+                        .show()
+                }
+            }
+
+            contentLayout.addView(settingsText)
+            contentLayout.addView(logoutButton)
+            addView(contentLayout)
+        }
+    }
+
+    // 添加定期同步
+    private fun startPeriodicSync() {
+        lifecycleScope.launch {
+            while (true) {
+                delay(30000) // 每30秒同步一次
+                try {
+                    if (serverGameManager.isLoggedIn) {
+                        serverGameManager.syncPlayerData()
+                        updateUI()
+                    }
+                } catch (e: Exception) {
+                    // 靜默處理同步錯誤
+                }
+            }
+        }
+    }
+
+    fun updatePlayerStats() {
+        updateUI()
+    }
+
+    // 其他UI輔助方法
     private fun clearMainDisplay() {
         mainDisplayArea.removeAllViews()
     }
 
-    // 顯示各個頁面的方法
     private fun showMainCity() {
         clearMainDisplay()
         val contentView = createScrollableContent(UIHelpers.GameTexts.WELCOME_TEXT)
@@ -278,9 +914,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showTrainingGround() {
         clearMainDisplay()
-        val battleView = BattleView(this, gameManager)
-        gameManager.setBattleView(battleView)
-
+        val battleView = BattleView(this, null) // 暫時傳null，因為現在用服務器管理
+        
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -299,109 +934,21 @@ class MainActivity : AppCompatActivity() {
         mainDisplayArea.addView(mainLayout)
     }
 
-    private fun createTrainingButtons(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            setPadding(16, 16, 16, 16)
-
-            val startButton = Button(this@MainActivity).apply {
-                text = "🎯 開始自動打怪"
-                setBackgroundColor(UIHelpers.Colors.GREEN)
-                setTextColor(UIHelpers.Colors.WHITE)
-                setPadding(20, 15, 20, 15)
-                isEnabled = !gameManager.isAutoBattling()
-                setOnClickListener {
-                    if (!gameManager.isAutoBattling()) {
-                        gameManager.startAutoBattle()
-                        updateUI()
-                        showTrainingGround()
-                    }
-                }
-            }
-
-            val stopButton = Button(this@MainActivity).apply {
-                text = "⏹️ 停止打怪"
-                setBackgroundColor(UIHelpers.Colors.RED)
-                setTextColor(UIHelpers.Colors.WHITE)
-                setPadding(20, 15, 20, 15)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(20, 0, 0, 0)
-                }
-                isEnabled = gameManager.isAutoBattling()
-                setOnClickListener {
-                    if (gameManager.isAutoBattling()) {
-                        gameManager.stopAutoBattle()
-                        updateUI()
-                        showTrainingGround()
-                    }
-                }
-            }
-
-            addView(startButton)
-            addView(stopButton)
-        }
-    }
-
     private fun showInventory() {
-        // 不改變當前位置，只顯示背包彈出窗
         showInventoryPopup()
     }
 
-    private fun showWeaponShop() {
-        clearMainDisplay()
-        val contentView = createShopContent(
-            "⚔️ 五金鋪 - 武器商店 ⚔️",
-            "目前武器攻擊力: +${gameManager.player.weaponAttack}",
-            UIHelpers.GameData.WEAPONS
-        ) { weapon ->
-            if (gameManager.buyWeapon(weapon)) {
-                Toast.makeText(this, "✅ 購買${weapon.name}成功！", Toast.LENGTH_SHORT).show()
-                updateUI()
-                showWeaponShop()
-                // 如果當前在背包界面，刷新背包
-                refreshInventoryIfShowing()
-            } else {
-                Toast.makeText(this, "❌ 金幣不足！還需要${weapon.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
-            }
-        }
-        mainDisplayArea.addView(contentView)
+    private fun showInventoryPopup() {
+        // 這裡可以實作從服務器獲取庫存的功能
+        Toast.makeText(this, "服務器背包功能開發中...", Toast.LENGTH_SHORT).show()
     }
 
-    private fun showArmorShop() {
-        clearMainDisplay()
-        val contentView = createShopContent(
-            "🛡️ 衣服店 - 防具商店 🛡️",
-            "目前防具防禦力: +${gameManager.player.armorDefense}",
-            UIHelpers.GameData.ARMORS
-        ) { armor ->
-            if (gameManager.buyArmor(armor)) {
-                Toast.makeText(this, "✅ 購買${armor.name}成功！", Toast.LENGTH_SHORT).show()
-                updateUI()
-                showArmorShop()
-                // 如果當前在背包界面，刷新背包
-                refreshInventoryIfShowing()
-            } else {
-                Toast.makeText(this, "❌ 金幣不足！還需要${armor.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
-            }
-        }
-        mainDisplayArea.addView(contentView)
+    private fun hideInventoryPopup() {
+        inventoryOverlay.animate().alpha(0f).setDuration(200).withEndAction {
+            inventoryOverlay.visibility = View.GONE
+        }.start()
     }
 
-    private fun showConvenienceStore() {
-        clearMainDisplay()
-        val contentView = createPotionShopContent()
-        mainDisplayArea.addView(contentView)
-    }
-
-    private fun showSettings() {
-        clearMainDisplay()
-        val contentView = createTitledContent("⚙️ 遊戲設定 ⚙️", UIHelpers.GameTexts.SETTINGS_TEXT)
-        mainDisplayArea.addView(contentView)
-    }
-
-    // UI輔助方法
     private fun createScrollableContent(text: String): ScrollView {
         return ScrollView(this).apply {
             layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
@@ -414,67 +961,6 @@ class MainActivity : AppCompatActivity() {
                 setPadding(16, 16, 16, 20)
                 setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_LIGHT_BLUE)
             })
-        }
-    }
-
-    private fun createTitledContent(title: String, content: String): ScrollView {
-        return ScrollView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            setPadding(16, 16, 16, 16)
-
-            val contentLayout = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-
-            val titleView = TextView(this@MainActivity).apply {
-                text = title
-                textSize = 20f
-                setTextColor(UIHelpers.Colors.GOLD)
-                gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 20)
-                setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_BLACK)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(0, 0, 0, 16)
-                }
-            }
-
-            val contentView = TextView(this@MainActivity).apply {
-                text = content
-                textSize = 16f
-                setTextColor(UIHelpers.Colors.WHITE)
-                setPadding(16, 16, 16, 20)
-                setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_GRAY)
-            }
-
-            contentLayout.addView(titleView)
-            contentLayout.addView(contentView)
-            addView(contentLayout)
-        }
-    }
-
-    private fun <T> createShopContent(title: String, currentStatus: String, items: List<T>, onBuyClick: (T) -> Unit): ScrollView {
-        return ScrollView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            setPadding(16, 16, 16, 16)
-
-            val contentLayout = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-
-            // 標題
-            contentLayout.addView(createShopTitle(title))
-
-            // 當前狀態
-            contentLayout.addView(createStatusText(currentStatus))
-
-            // 商品列表
-            items.forEach { item ->
-                contentLayout.addView(createShopButton(item, onBuyClick))
-            }
-
-            addView(contentLayout)
         }
     }
 
@@ -505,51 +991,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun <T> createShopButton(item: T, onBuyClick: (T) -> Unit): Button {
-        return Button(this).apply {
-            when (item) {
-                is Weapon -> {
-                    text = "${item.name}\n攻擊+${item.attack} - ${item.price}💰"
-                    setBackgroundColor(UIHelpers.Colors.GOLD)
-                    setTextColor(UIHelpers.Colors.BROWN)
-                }
-                is Armor -> {
-                    text = "${item.name}\n防禦+${item.defense} - ${item.price}💰"
-                    setBackgroundColor(UIHelpers.Colors.LIGHT_BLUE)
-                    setTextColor(UIHelpers.Colors.DARK_BLUE)
-                }
-            }
-            setPadding(16, 12, 16, 12)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(0, 8, 0, 8)
-            }
-            setOnClickListener { onBuyClick(item) }
-        }
-    }
-
-    private fun createPotionShopContent(): ScrollView {
-        return ScrollView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-            setPadding(16, 16, 16, 16)
-
-            val contentLayout = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            }
-
-            // 標題和介紹
-            contentLayout.addView(createShopTitle("🏪 便利店 - 回血藥品 🧪"))
-            contentLayout.addView(createPotionIntro())
-
-            // 藥品列表
-            UIHelpers.GameData.POTIONS.forEach { potion ->
-                contentLayout.addView(createPotionContainer(potion))
-            }
-
-            addView(contentLayout)
-        }
-    }
-
     private fun createPotionIntro(): TextView {
         return TextView(this).apply {
             text = UIHelpers.GameTexts.POTION_INTRO
@@ -564,118 +1005,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createPotionContainer(potion: HealingPotion): LinearLayout {
-        val currentCount = gameManager.player.potions[potion] ?: 0
-
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(8, 8, 8, 8)
-            setBackgroundColor(UIHelpers.Colors.SEMI_TRANSPARENT_GREEN)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                setMargins(0, 8, 0, 8)
-            }
-
-            val potionInfo = TextView(this@MainActivity).apply {
-                text = "${potion.name}\n${potion.description}\n目前持有: ${currentCount}個"
-                textSize = 14f
-                setTextColor(UIHelpers.Colors.WHITE)
-                setPadding(8, 8, 8, 8)
-            }
-
-            val buttonLayout = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
-
-            val buyOneButton = Button(this@MainActivity).apply {
-                text = "買1個\n${potion.price}💰"
-                setBackgroundColor(UIHelpers.Colors.LIGHT_GREEN)
-                setTextColor(UIHelpers.Colors.DARK_GREEN)
-                setPadding(12, 8, 12, 8)
-                setOnClickListener {
-                    if (gameManager.buyPotion(potion, 1)) {
-                        Toast.makeText(this@MainActivity, "✅ 購買1個${potion.name}成功！", Toast.LENGTH_SHORT).show()
-                        updateUI()
-                        showConvenienceStore()
-                        refreshInventoryIfShowing()
-                    } else {
-                        Toast.makeText(this@MainActivity, "❌ 金幣不足！還需要${potion.price - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-
-            val buyTenButton = Button(this@MainActivity).apply {
-                text = "買10個\n${potion.price * 10}💰"
-                setBackgroundColor(Color.parseColor("#90EE90"))
-                setTextColor(UIHelpers.Colors.DARK_GREEN)
-                setPadding(12, 8, 12, 8)
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    setMargins(16, 0, 0, 0)
-                }
-                setOnClickListener {
-                    if (gameManager.buyPotion(potion, 10)) {
-                        Toast.makeText(this@MainActivity, "✅ 購買10個${potion.name}成功！", Toast.LENGTH_SHORT).show()
-                        updateUI()
-                        showConvenienceStore()
-                        refreshInventoryIfShowing()
-                    } else {
-                        Toast.makeText(this@MainActivity, "❌ 金幣不足！還需要${potion.price * 10 - gameManager.player.gold}金幣", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-
-            buttonLayout.addView(buyOneButton)
-            buttonLayout.addView(buyTenButton)
-
-            addView(potionInfo)
-            addView(buttonLayout)
-        }
-    }
-
     // 生命週期方法
     override fun onDestroy() {
         super.onDestroy()
-        gameManager.saveGameState()
+        // 不再需要本地儲存，所有資料都在服務器
     }
 
     override fun onPause() {
         super.onPause()
-        gameManager.saveGameState()
+        // 不再需要本地儲存，所有資料都在服務器
     }
 
     override fun onResume() {
         super.onResume()
-        gameManager.loadGameState()
-        updateUI()
-
-        // 根據當前位置顯示相應內容
-        when {
-            gameManager.currentLocation.startsWith("trainingGround") -> {
-                updateButtonSelection(btnTraining)
-                showTrainingGround()
-            }
-            gameManager.currentLocation == "inventory" -> {
-                updateButtonSelection(btnInventory)
-                showInventory()
-            }
-            gameManager.currentLocation == "weaponShop" -> {
-                updateButtonSelection(btnShop)
-                showWeaponShop()
-            }
-            gameManager.currentLocation == "armorShop" -> {
-                updateButtonSelection(btnShop)
-                showArmorShop()
-            }
-            gameManager.currentLocation == "convenienceStore" -> {
-                updateButtonSelection(btnShop)
-                showConvenienceStore()
-            }
-            gameManager.currentLocation == "settings" -> {
-                updateButtonSelection(btnSettings)
-                showSettings()
-            }
-            else -> {
-                showMainCity()
+        // 重新連接時同步資料
+        if (serverGameManager.isLoggedIn) {
+            lifecycleScope.launch {
+                try {
+                    serverGameManager.syncPlayerData()
+                    updateUI()
+                } catch (e: Exception) {
+                    // 同步失敗可能需要重新登入
+                }
             }
         }
     }
@@ -695,48 +1046,5 @@ class MainActivity : AppCompatActivity() {
                 super.onBackPressed()
             }
         }
-    }
-
-    fun updatePlayerStats() {
-        updateUI()
-    }
-
-    private fun refreshInventoryIfShowing() {
-        // 檢查當前顯示區域是否有InventoryView
-        for (i in 0 until mainDisplayArea.childCount) {
-            val child = mainDisplayArea.getChildAt(i)
-            if (child is InventoryView) {
-                child.refreshInventory()
-                break
-            }
-        }
-
-        // 檢查背包彈出窗是否顯示
-        if (inventoryOverlay.visibility == View.VISIBLE) {
-            val inventoryView = inventoryOverlay.findViewById<InventoryView>(INVENTORY_VIEW_ID)
-            inventoryView?.refreshInventory()
-        }
-    }
-
-    private fun showInventoryPopup() {
-        // 創建背包視圖
-        val inventoryView = InventoryView(this, gameManager)
-        inventoryView.id = INVENTORY_VIEW_ID // 使用常量ID
-
-        // 清除舊的背包視圖
-        val inventoryContainer = inventoryOverlay.findViewById<FrameLayout>(R.id.inventoryContainer)
-        inventoryContainer.removeAllViews()
-        inventoryContainer.addView(inventoryView)
-
-        // 顯示背包彈出窗
-        inventoryOverlay.visibility = View.VISIBLE
-        inventoryOverlay.alpha = 0f
-        inventoryOverlay.animate().alpha(1f).setDuration(200).start()
-    }
-
-    private fun hideInventoryPopup() {
-        inventoryOverlay.animate().alpha(0f).setDuration(200).withEndAction {
-            inventoryOverlay.visibility = View.GONE
-        }.start()
     }
 }
